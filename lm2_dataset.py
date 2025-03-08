@@ -34,11 +34,6 @@ class LM2_Dataset(Dataset):
                                   padding="max_length",
                                   add_special_tokens=True,
                                   return_tensors="pt")
-
-        # tokens =  self.tokenizer.decode(encoding["input_ids"].squeeze(0))
-        # formatted_tokens = [f"_{token}" if token.startswith("▁") else token for token in tokens]
-        # print("📌 Tokenized Tokens:", formatted_tokens)
-        # print("📌 Decoded:", self.tokenizer.decode(encoding["input_ids"].squeeze(0)))
         
         input_ids = encoding["input_ids"].squeeze(0)
         attention_mask = encoding["attention_mask"].squeeze(0)
@@ -46,15 +41,8 @@ class LM2_Dataset(Dataset):
         labels = input_ids.clone()
         prompt_enc = self.tokenizer(text=prompt_format, add_special_tokens=False)
         prompt_len = len(prompt_enc["input_ids"])
-        labels[:prompt_len] = -100
-        # labels[:-1] = input_ids[1:]  # Next token prediction을 위해 shift
-        # labels[-1] = self.tokenizer.pad_token_id  # 마지막 토큰은 padding으로 채움
-
-        # labels = torch.cat([input_ids[1:], torch.tensor([self.tokenizer.pad_token_id])])
-
+        labels[:prompt_len] = -100 # prompt 학습 제외
         labels[labels == self.tokenizer.pad_token_id] = -100  # 패딩된 부분 학습 제외
-
-        # print("📌 Decoded Labels:", self.tokenizer.decode([token for token in labels if token != -100], skip_special_tokens=False))
 
         return {"input_ids": input_ids,
                 "attention_mask": attention_mask,

@@ -17,8 +17,8 @@ from transformers import (Trainer, TrainingArguments,
                           BitsAndBytesConfig)
 
 from config import *
-from function.lm2.memory_module import LM2MemoryModule
-from function.lm2.lm2causal import LM2ForCausalLM
+from function.lm2.lm2_memory_module import LM2MemoryModule
+from function.lm2.lm2_causal import LM2ForCausalLM
 from function.lm2.lm2_dataset import LM2_Dataset, collate_fn
 
 
@@ -67,9 +67,9 @@ if __name__=="__main__":
         start_step = checkpoint["step"]
         new_mem = checkpoint["memory_states"]
         model.to("cuda")
-        print(f"✅ 모델 로드 완료! {start_epoch}epoch 부터 학습을 재개합니다.")
+        print(f"모델 로드 완료! {start_epoch}epoch 부터 학습을 재개합니다.")
     else:
-        print(f"🚨 저장된 모델이 없습니다. 새 모델을 학습합니다.")
+        print(f"저장된 모델이 없습니다. 새 모델을 학습합니다.")
         start_step = 0
 
     print("모델 준비 !!!!!!")
@@ -85,30 +85,6 @@ if __name__=="__main__":
                             shuffle=True,
                             pin_memory=True,
                             collate_fn=collate_fn)
-    
-    # training_args = TrainingArguments(
-    #                         output_dir="./output",  # 모델 저장 경로
-    #                         # evaluation_strategy="epoch",  # 매 epoch마다 검증 실행
-    #                         save_strategy="epoch",  # 매 epoch마다 모델 저장
-    #                         per_device_train_batch_size=1,  # GPU당 배치 크기
-    #                         # per_device_eval_batch_size=1,
-    #                         gradient_accumulation_steps=64,  # 메모리 절약을 위해 gradient 누적
-    #                         learning_rate=5e-5,  # 학습률
-    #                         weight_decay=0.01,  # 가중치 감쇠 (AdamW)
-    #                         num_train_epochs=3,  # 학습할 epoch 수
-    #                         save_total_limit=2,  # 저장할 모델 체크포인트 개수 제한
-    #                         logging_dir="./output/logs",  # 로그 저장 경로
-    #                         logging_steps=1,  # 10 스텝마다 로그 출력
-    #                         # fp16=True,  # mixed precision (속도 향상)
-    #                         bf16=True,
-    #                         push_to_hub=False,  # 학습 완료 후 허브에 업로드 여부
-    #                     )
-    
-    # trainer = Trainer(model=model,
-    #                     args=training_args,
-    #                     train_dataset=dataset)
-    
-    # trainer.train()
 
     # 결과 저장을 위한 리스트
     generation_results = []
@@ -138,7 +114,7 @@ if __name__=="__main__":
             logit, loss, new_mem = model(input_ids=input_ids,
                                         attention_mask=attention_mask,
                                         labels=labels,
-                                        memory_states=None)
+                                        memory_states=None) ####
             # new_mem = new_mem.detach() # Autograd 추적 차단
             loss = loss / accum_steps
             if loss < 1e-6:
@@ -176,7 +152,7 @@ if __name__=="__main__":
                 "memory_states": new_mem, ####
             }, model_save_path)
             
-            print(f"✅ 모델 저장 완료: {model_save_path}")
+            print(f"모델 저장 완료: {model_save_path}")
 
             if total_steps - display_step < 1:
                 break
@@ -201,16 +177,9 @@ if __name__=="__main__":
         correct_predictions = 0
         total_predictions = 0
 
-        # with torch.no_grad():
-        #     output = model.generate(input_ids, max_new_tokens=100, do_sample=False)
-
-        # generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
-        # print(f"\n🔹 [Epoch {epoch+1}] 모델 평가 결과:")
-        # print(f"입력: {test_text}")
-        # print(f"출력: {generated_text}")
 
         generated = input_ids.clone()
-        memory_states = new_mem #########
+        memory_states = new_mem #####
         for i in range(100):
             with torch.no_grad():
                 out_logits, _, memory_states = model(
@@ -223,7 +192,7 @@ if __name__=="__main__":
 
         generated_text = "generated:", tokenizer.decode(generated[0].tolist(), skip_special_tokens=False)
 
-        print(f"\n🔹 [Epoch {epoch+1}] 모델 평가 결과:")
+        print(f"\n[Epoch {epoch+1}] 모델 평가 결과:")
         print(f"입력: {test_title}")
         print(f"출력: {generated_text}")
 
@@ -239,12 +208,13 @@ if __name__=="__main__":
         # model_save_path = os.path.join(save_dir, f"model_epoch_{epoch+1}.pt")
         torch.save({
             "epoch": epoch + 1,
+            "step": 0,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "memory_states": new_mem, ######################
+            "memory_states": new_mem, #####
         }, model_save_path)
         
-        print(f"✅ 모델 저장 완료: {model_save_path}")
+        print(f"모델 저장 완료: {model_save_path}")
 
         # 🔹 최종 결과를 JSON 파일로 저장
         results_path = os.path.join(save_dir, "generation_results.json")

@@ -4,7 +4,7 @@ import torch
 
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
-from function.lm2.memory_module import LM2MemoryModule
+from function.lm2.lm2_memory_module import LM2MemoryModule
 from rope_attention import LlamaAttentionWithPoPR
 
 class LlamaDecoderLayerWithMemory(LlamaDecoderLayer):

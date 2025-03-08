@@ -3,8 +3,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from function.lm2.memory_module import LM2MemoryModule
-from function.lm2.memory_llama_model import LlamaModelWithMemory
+from function.lm2.lm2_memory_module import LM2MemoryModule
+from function.lm2.lm2_llama_model import LlamaModelWithMemory
 
 class LM2ForCausalLM(nn.Module):
     def __init__(self,
@@ -51,7 +51,6 @@ class LM2ForCausalLM(nn.Module):
                 shift_labels.view(-1)
             )
         
-        # return (logits, loss, new_memory, [attentions?])
         if output_attentions:
             all_attn = outputs[1]
             return (logits, loss, new_memory, all_attn)

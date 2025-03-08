@@ -5,8 +5,8 @@ import torch.nn as nn
 
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaModel, LlamaConfig
 
-from function.lm2.memory_module import LM2MemoryModule
-from function.lm2.memory_decoder_layer import LlamaDecoderLayerWithMemory
+from function.lm2.lm2_memory_module import LM2MemoryModule
+from function.lm2.lm2_decoder_layer import LlamaDecoderLayerWithMemory
 from rope import build_sin_cos_position_embeddings
 
 class LlamaModelWithMemory(LlamaModel):
@@ -61,7 +61,6 @@ class LlamaModelWithMemory(LlamaModel):
 
         cos, sin = self.rotary_emb(input_embeds, position_ids)
         position_embeddings = (cos, sin)
-        # position_embeddings = kwargs.get("position_embeddings", None)
 
         # layer stack
         all_attentions = () if output_attentions else None
