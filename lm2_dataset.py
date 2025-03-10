@@ -1,13 +1,10 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import json
 from time import time
 
 # torch
 import torch
 from torch.utils.data import Dataset, DataLoader
+
 
 class LM2_Dataset(Dataset):
     def __init__(self, json_path, tokenizer):

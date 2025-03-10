@@ -6,6 +6,7 @@ import torch.nn as nn
 from function.lm2.lm2_memory_module import LM2MemoryModule
 from function.lm2.lm2_llama_model import LlamaModelWithMemory
 
+
 class LM2ForCausalLM(nn.Module):
     def __init__(self,
                  config,

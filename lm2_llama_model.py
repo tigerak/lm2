@@ -7,7 +7,8 @@ from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaMod
 
 from function.lm2.lm2_memory_module import LM2MemoryModule
 from function.lm2.lm2_decoder_layer import LlamaDecoderLayerWithMemory
-from rope import build_sin_cos_position_embeddings
+# from rope import build_sin_cos_position_embeddings
+
 
 class LlamaModelWithMemory(LlamaModel):
     def __init__(self, 
@@ -24,8 +25,6 @@ class LlamaModelWithMemory(LlamaModel):
             block.load_state_dict(layer.state_dict(), strict=False)
             new_layers.append(block)
         self.layers = new_layers
-
-        self.memory_module = memory_module
 
     def forward(self, 
                 input_ids: Optional[torch.LongTensor]=None, 

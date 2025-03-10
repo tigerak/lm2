@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class LM2MemoryModule(nn.Module):
+class LM2MemoryModule_Explan(nn.Module):
     """
     논문 2.1, 2.2절 구조.
     - 메모리 모듈 shape: (N, d, d)
@@ -12,10 +12,12 @@ class LM2MemoryModule(nn.Module):
     """
     def __init__(self, 
                  d_model: int, 
-                 num_slots: int):
+                 num_slots: int,
+                 lambda_pram: float=0.5):
         super().__init__()
         self.d_model = d_model
         self.num_slots = num_slots
+        self.lambda_pram = lambda_pram
 
         # Memory 파라미터(슬롯), 논문에서 "M_r = I_{d×d}"로 초기화.
         mem_init = torch.eye(d_model).unsqueeze(0).repeat(num_slots,1,1) # eye(d_model) = (d, d)
@@ -43,7 +45,7 @@ class LM2MemoryModule(nn.Module):
         M_t: (Batch_size, Num_slots, d_model, d_model) => 이전 memory 상태
         return:
           E_out: (Batch_size, Seq_len, d_model)
-          M_out: (Batch_size, sNum_slots, d_model, d_model)
+          M_out: (Batch_size, Num_slots, d_model, d_model)
         """
         batch_size, seq_len, d_model = E_t.shape
         B, S, d = batch_size, seq_len, d_model
@@ -84,12 +86,14 @@ class LM2MemoryModule(nn.Module):
             if torch.isnan(attn_probs).any():
                 print("경고: NaN detected in attention probabilities!")
 
-            # E_mem = attn_probs * V_ : (B, 1, d) <- resultant attention output
+            # E_mem_3d = attn_probs * V_ : (B, 1, d) <- resultant attention output
             E_mem_3d = torch.bmm(attn_probs, V_) # 배치 행렬 곱
-            E_mem = E_mem_3d.squeeze(1)
+            E_mem = E_mem_3d.squeeze(1) # (B, d)
 
             ### Output Gate ###
-            g_out = torch.sigmoid(self.W_out(E_mem))
+            g_out = torch.sigmoid(self.W_out(E_mem)) # (B, d)
+            # e_mem_gated = g_out * (self.lambda_pram * M_out 
+            #                        + (1-self.lambda_pram) * E_mem)
             e_mem_gated = g_out * E_mem
             e_t_new = e_t + e_mem_gated  # skip connection
 
@@ -114,5 +118,81 @@ class LM2MemoryModule(nn.Module):
             M_out = g_in_4d * new_info_4d + g_forget_4d * M_out
 
             E_out[:, t, :] = e_t_new
+
+        return E_out, M_out
+    
+
+class LM2MemoryModule(nn.Module):
+    def __init__(self,
+                 d_model: int, 
+                 num_slots: int,
+                 memory_rank: int):
+        super().__init__()
+        self.num_slots = num_slots
+        self.memory_rank = memory_rank if memory_rank else d_model
+
+        if memory_rank: # 저랭크 근사 U @ V^T
+            U = torch.randn(num_slots, d_model, memory_rank)
+            V = torch.randn(num_slots, memory_rank, d_model)
+            self.U = nn.Parameter(U, requires_grad=True)
+            self.V = nn.Parameter(V, requires_grad=True)
+        else: # 단위 행렬 초기화
+            mem_init = torch.eye(d_model).unsqueeze(0).repeat(num_slots,1,1)
+            self.memory = nn.Parameter(mem_init, requires_grad=True)
+
+        # Q, K, V 파라미터
+        self.W_Q = nn.Linear(d_model, d_model)
+        self.W_K = nn.Linear(d_model*d_model, d_model)
+        self.W_V = nn.Linear(d_model*d_model, d_model)
+
+        # 게이트 파라미터
+        self.W_out = nn.Linear(d_model, d_model)
+        self.W_forget = nn.Linear(d_model, d_model)
+        self.W_in = nn.Linear(d_model, d_model)
+
+    def forward(self,
+                E_t: torch.Tensor, 
+                M_t: torch.Tensor=None):
+        
+        B, S, d = E_t.shape
+        N = self.num_slots
+        # r = self.memory_rank
+        r = d
+        
+        if M_t is None:
+            M_out = torch.bmm(self.U, self.V).unsqueeze(0) \
+                .expand(B, N, d, r) \
+                .clone()
+        else:
+            M_out = M_t.clone()
+        
+        Q = self.W_Q(E_t) # (B, S, d)
+        M_flat = M_out.view(B, N, d * r) # (B, N, d*r)
+        K_ = self.W_K(M_flat) # (B, N, d)
+        V_ = self.W_V(M_flat) # (B, N, d)
+        
+        attn_score = torch.bmm(Q, K_.transpose(2, 1)) / (d ** 0.5)
+        attn_probs = F.softmax(attn_score, dim=-1) # (B, S, N)
+        # Nan 체크
+        if torch.isnan(attn_probs).any():
+            print("경고: NaN detected in attention probabilities!")
+        E_mem = torch.bmm(attn_probs, V_) # (B, S, d)
+
+        ### Output Gate ###
+        g_out = torch.sigmoid(self.W_out(E_mem)) # (B, S, d)
+        E_mem_gated = g_out * E_mem
+        E_out = E_t + E_mem_gated
+
+        ### Memory Update ###
+        g_in_vec = torch.sigmoid(self.W_in(E_t)) # (B, S, d)
+        g_forget_vec = torch.sigmoid(self.W_forget(E_mem)) # (B, S, d)
+        new_info_vec = torch.tanh(E_mem) # (B, S, d)
+
+        g_in_5d = g_in_vec.unsqueeze(2).unsqueeze(-1).expand(B, S, N, d, r)
+        g_forget_5d = g_forget_vec.unsqueeze(2).unsqueeze(-1).expand(B, S, N, d, r)
+        new_info_5d = new_info_vec.unsqueeze(2).unsqueeze(-1).expand(B, S, N, d, r)
+
+        M_out = g_in_5d * new_info_5d + g_forget_5d * M_out  # (B, S, N, d, r)
+        M_out = M_out[:, 0] # (B, N, d, r)
 
         return E_out, M_out

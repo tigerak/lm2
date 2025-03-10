@@ -5,7 +5,8 @@ import torch
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
 from function.lm2.lm2_memory_module import LM2MemoryModule
-from rope_attention import LlamaAttentionWithPoPR
+# from rope_attention import LlamaAttentionWithPoPR
+
 
 class LlamaDecoderLayerWithMemory(LlamaDecoderLayer):
     def __init__(self, 
@@ -28,7 +29,7 @@ class LlamaDecoderLayerWithMemory(LlamaDecoderLayer):
                 memory_states: Optional[torch.Tensor]=None, 
                 **kwargs):
 
-        # 기존 self-attention
+        # Llama self-attention
         residual = hidden_states # (B, S, d)
         hidden_states  = self.input_layernorm(hidden_states)
         attn_output, attn_weights = self.self_attn(
@@ -43,14 +44,14 @@ class LlamaDecoderLayerWithMemory(LlamaDecoderLayer):
                                         ) # output: attn_output, attn_weights
         hidden_states = residual + attn_output
         
-        # memory module 추가
+        # LM2 memory module 추가
         residual2 = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-        # memory_module => (E_out, updated_mem)
-        E_out, updated_mem = self.memory_module(hidden_states, memory_states)
+        E_out, updated_mem = self.memory_module(hidden_states, 
+                                                memory_states) # memory_module => (E_out, updated_mem)
         hidden_states = residual2 + E_out
         
-        # 기존 MLP
+        # Llama MLP
         residual3 = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
