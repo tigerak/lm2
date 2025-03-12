@@ -92,4 +92,3 @@ class LlamaModelWithMemory(LlamaModel):
         output += (current_mem, )
 
         return output
-        # return hidden_states, mem

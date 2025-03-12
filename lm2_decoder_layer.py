@@ -1,6 +1,7 @@
 from typing import Optional, Tuple, Any
 
 import torch
+from torch.utils.checkpoint import checkpoint
 
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
@@ -55,6 +56,7 @@ class LlamaDecoderLayerWithMemory(LlamaDecoderLayer):
         residual3 = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
+        # hidden_states = checkpoint(self.mlp, hidden_states)
         hidden_states = residual3 + hidden_states 
         
         outputs = (hidden_states,)
